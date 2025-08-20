@@ -1,8 +1,9 @@
 """Sylvester normalizing flow network implementation."""
+import warnings
 
 import torch
 from tqdm import tqdm
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Tuple, Optional, List
 
 from .layers import SylvesterBlock
 
@@ -55,26 +56,53 @@ class SylvesterNet(torch.nn.Module):
         
         return x, logdet
     
-    def inverse(self, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def inverse(self, 
+                y: torch.Tensor,
+                max_iterations: int = 100,
+                tolerance: float = 1e-6
+                ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Inverse pass through the Sylvester network.
-        
-        Note: This method is not implemented yet. For a complete normalizing flow,
-        the inverse transformation would apply the blocks in reverse order.
         
         Args:
             y (torch.Tensor): Output tensor to invert.
             
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Input tensor and log determinant.
-            
-        Raises:
-            NotImplementedError: This method is not yet implemented.
         """
-        raise NotImplementedError(
-            "Inverse transformation not implemented. "
-            "This would require implementing inverse operations for each block."
-        )
+        with torch.no_grad():
+
+            inverse_logs = {
+                'residual_history': torch.zeros((len(self.blocks), max_iterations,)) * float('nan'),
+                'max_iteration_history': torch.zeros((len(self.blocks),))
+            }
+
+            x = y
+
+            for b, block in enumerate(self.blocks[::-1]):
+                for iteration in range(max_iterations):
+                    # Fixed point iteration: x = x + (y - f(x))
+                    fx, _ = block.forward(x)
+                    error = fx - y
+                    error_max = error.abs().max().item()
+                    inverse_logs['residual_history'][b, iteration] = error_max
+
+                    if error_max <= tolerance:
+                        break
+                    else:
+                        x = x - error
+
+                inverse_logs['max_iteration_history'][b] = iteration
+
+                if iteration == (max_iterations - 1):
+                    warnings.warn(
+                        f"Inverse reached maximum iterations {max_iterations} "
+                        f"in the {b+1}-th block from the end."
+                        f"Final residual: {error.abs().max():.3e}",
+                        RuntimeWarning
+                    )
+                y = x
+        return x, inverse_logs
 
     def fit(self, x: torch.Tensor, 
             epochs: int = 10,
@@ -84,7 +112,7 @@ class SylvesterNet(torch.nn.Module):
         """
         Simple example of a training loop provided as reference.
 
-        Parameters:
+        Args:
             x (torch.Tensor): Input data tensor to train on.
             epochs (int, optional): Number of training epochs. Defaults to 10.
             optimizer (torch.optim.Optimizer, optional): PyTorch optimizer to use for training.

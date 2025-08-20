@@ -1,5 +1,5 @@
 import torch
-from typing import Dict, Any, Tuple, Optional
+from typing import Tuple
 
 from .parametrizations import Triu, DiagAct, Orthogonalize
 
