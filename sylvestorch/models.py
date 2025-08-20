@@ -3,7 +3,7 @@
 import torch
 from typing import Dict, Any, Tuple
 
-import layers
+from .layers import SylvesterBlock
 
 
 class SylvesterNet(torch.nn.Module):

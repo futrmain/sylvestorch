@@ -1,7 +1,7 @@
 import torch
 from typing import Dict, Any, Tuple, Optional
 
-from parametrizations import Triu, DiagAct, Orthogonolize
+from .parametrizations import Triu, DiagAct, Orthogonalize
 
 
 class SylvesterBlock(torch.nn.Module):
@@ -75,7 +75,7 @@ class SylvesterBlock(torch.nn.Module):
         self._initialize_orthogonal_matrix(hidden_size)
         torch.nn.utils.parametrize.register_parametrization(
             self.Q, "weight", 
-            Orthogonolize(input_size, hidden_size, eps=ortho_eps))
+            Orthogonalize(input_size, hidden_size, eps=ortho_eps))
 
         # Bias parameter (batch last because of x.T in forward)
         self.bias = torch.nn.Parameter(torch.randn(hidden_size, 1)) 
