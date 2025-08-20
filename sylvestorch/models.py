@@ -1,7 +1,8 @@
 """Sylvester normalizing flow network implementation."""
 
 import torch
-from typing import Dict, Any, Tuple
+from tqdm import tqdm
+from typing import Dict, Any, Tuple, Optional, List
 
 from .layers import SylvesterBlock
 
@@ -74,3 +75,49 @@ class SylvesterNet(torch.nn.Module):
             "Inverse transformation not implemented. "
             "This would require implementing inverse operations for each block."
         )
+
+    def fit(self, x: torch.Tensor, 
+            epochs: int = 10,
+            optimizer: Optional[torch.optim.Optimizer] = None,
+            lr: float = 0.01,
+            ) -> Dict[str, List[float]]:
+        """
+        Simple example of a training loop provided as reference.
+
+        Parameters:
+            x (torch.Tensor): Input data tensor to train on.
+            epochs (int, optional): Number of training epochs. Defaults to 10.
+            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer to use for training.
+            lr (float, optional): Learning rate to use if creating a new optimizer. Defaults to 0.01.
+    
+        Returns:
+            Dict[str, List[float]]: Epoch-wise mean square & logdet.
+        """
+        
+        # Set default optimizer if not provided
+        if optimizer is None:
+            optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        else:
+            optimizer = optimizer(self.parameters(), lr=lr)
+
+        training_logs = {
+            'meansquare' : torch.zeros((epochs,)),
+            'logdet' : torch.zeros((epochs,))
+        }
+        
+        for epoch in tqdm(range(epochs)):
+            optimizer.zero_grad()
+
+            y, ld = self.forward(x)
+
+            meansquare = y.square().mean()
+            logdet = ld.square().mean()
+
+            loss = meansquare + logdet
+            loss.backward()
+            optimizer.step()
+
+            training_logs['meansquare'][epoch] = meansquare.item()
+            training_logs['logdet'][epoch] = logdet.item()
+
+        return training_logs

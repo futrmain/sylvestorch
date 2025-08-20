@@ -5,7 +5,7 @@ Parametrization modules for the Sylvester library.
 import warnings
 
 import torch
-from typing import List, Callable
+from typing import Callable
 
 
 class Triu(torch.nn.Module):
