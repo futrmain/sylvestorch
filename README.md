@@ -36,5 +36,18 @@ assert torch.allclose(x, z)
 
 ```
 
+### As an invertible transformation
+
+The Sylvester network can map data between spaces, e.g. from the MNIST manifold to a latent space ( $y = f(x)$ ). 
+This transformation is invertible, i.e.
+```math
+z = f^{-1}(y) = f^{-1}(f(x)) = x
+```
 <img src="./MNIST_inversion.jpg" width="700" />
+
+### As a generative model
+
+The inverse network transformation $f^{-1}$ can be used on a random samples to generate data from the original space.
+
+<img src="./MNIST_generation.png" width="500" />
 
