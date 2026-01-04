@@ -67,3 +67,26 @@ def test_log_det_matches_autograd_jacobian_small_dim(batch, input_size, hidden_s
     assert torch.allclose(detJ, logdet, atol=1e-4, rtol=1e-5)
 
 
+@pytest.mark.parametrize("batch,input_size,hidden_size,ortho_eps", [(1000, 4, 3, 1e-6), (100, 8, 8, 1e-3), (300, 123, 13, 1e-4)])
+def test_inverse(batch, input_size, hidden_size, ortho_eps):
+    block = SylvesterBlock(input_size=input_size, hidden_size=hidden_size, ortho_eps=ortho_eps)
+    x = torch.randn(batch, input_size)
+
+    y, log_det = block(x)
+    z = y
+    for iteration in range(100):
+        fx, _ = block.forward(z)
+        error = fx - y
+        error_max = error.abs().max().item()
+        
+        if error_max <= 1e-6:
+            break
+        else:
+            z = z - error
+
+    assert z.shape == x.shape
+    assert torch.isfinite(z).all()
+    assert not torch.isnan(z).any()
+    assert error_max <= 1e-6, f"Error max: {error_max}"
+    assert iteration < 99, f"Number of iterations: {iteration}"
+    assert torch.allclose(x, z, atol=1e-6), f"Inverse not equal to original, Number of iterations: {iteration}, Error max: {error_max}"
