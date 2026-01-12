@@ -17,7 +17,7 @@ f(x) = x + QR_2h(R_1 Q^t + \mathbf{b})
 
 where $`Q`$ is an orthonormal matrix, $`R_1`$ and $`R_2`$ are upper triangular matrices with appropriate diagonal values, $`h`$ is a non-linear (smooth, bounded) activation function, and $`b`$  is a learned constant vector. 
 
-This is omplemented by `layers.SylvesterBlock` and used by `models.SylvesterNet`.
+This is implemented by `layers.SylvesterBlock` and used by `models.SylvesterNet`.
 
 ### Generalized Sylvester
 
@@ -35,7 +35,7 @@ Particularly, $`f_{AR}`$ is expressed as:
 f_{AR}(x) = \gamma s_2(x) tanh(x s_1(x) + t_1(x)) + t2(x)
 ```
 
-This is omplemented by `layers.GeneralizedSylvesterBlock` and used by `models.GeneralizedSylvesterNet`.
+This is implemented by `layers.GeneralizedSylvesterBlock` and used by `models.GeneralizedSylvesterNet`.
 
 ## Usage
 
