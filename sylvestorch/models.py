@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 from typing import Dict, Tuple, Optional, List
 
-from .layers import SylvesterBlock
+from .layers import SylvesterBlock, GeneralizedSylvesterBlock
 
 
 class SylvesterNet(torch.nn.Module):
@@ -149,3 +149,25 @@ class SylvesterNet(torch.nn.Module):
             training_logs['logdet'][epoch] = logdet.item()
 
         return training_logs
+    
+
+class GeneralizedSylvesterNet(torch.nn.Module):
+  def __init__(self, input_size, n_blocks):
+    super(GeneralizedSylvesterNet, self).__init__()
+    
+    self.blocks = torch.nn.ModuleList()
+
+    for b in range(n_blocks):
+      self.blocks.append(GeneralizedSylvesterBlock(input_size))
+
+  def forward(self, x):
+    logdet = 0.0
+    for block in self.blocks:
+      x, ldj = block(x)
+      logdet = logdet + ldj
+    return x, logdet
+  
+  def inverse(self, x):
+    for block in self.blocks[::-1]:
+      x = block.inverse(x)
+    return x 
