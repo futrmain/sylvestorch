@@ -1,7 +1,7 @@
 import torch
 from typing import Tuple
 
-from .parametrizations import Triu, DiagAct, Orthogonalize
+from .parametrizations import Triu, Tril, DiagAct, Orthogonalize
 
 
 class SylvesterBlock(torch.nn.Module):
@@ -147,3 +147,112 @@ class SylvesterBlock(torch.nn.Module):
             f'hidden_size={self.R1.weight.shape[0]}, '
             f'input_size={self.Q.weight.shape[0]}'
         )
+    
+class S_Function(torch.nn.Module):
+    """
+    A strictly autoregressive function that satisfies restrictions 
+    and returns the diagonal of its Jacobian.
+    """
+    def __init__(self, size):
+        super(S_Function, self).__init__()
+
+        self.s = torch.nn.Linear(size, size, bias=True)
+
+        # Initialization scalings
+        with torch.no_grad():
+            self.s.weight /= torch.sqrt(torch.tensor(size)) #/= (self.s.weight.shape[0] - torch.arange(self.s.weight.shape[0])).reshape(-1,1)
+            self.s.bias *= 0.01
+            
+        torch.nn.utils.parametrize.register_parametrization(self.s, "weight", Triu(diagonal=1))
+
+        self.diag = torch.nn.Parameter(torch.randn((1,size,))/torch.sqrt(torch.tensor(size)))
+        self.act = torch.tanh
+
+    def forward(self, x):
+        th = self.act(self.diag)
+        y = self.s(x) + th * x
+
+        return y, th
+  
+class AutoRecursiveFunction(torch.nn.Module):
+    """
+    Auto-regressive function expressed as:
+    f_ar(x) = gamma * s2(x) * tanh(x * s1(x) + t1(x)) + t1(x)
+    according to the paper formulation. 
+    """
+    def __init__(self, size):
+        super(AutoRecursiveFunction, self).__init__()
+
+        self.t1 = torch.nn.Linear(size, size, bias=False)
+        self.t2 = torch.nn.Linear(size, size, bias=False)
+        
+        self.s1 = S_Function(size)
+        self.s2 = S_Function(size)
+
+        self.gamma = torch.tensor(0.5)
+
+        with torch.no_grad():
+            self.t1.weight /= torch.tensor(size)
+            self.t2.weight /= torch.tensor(size)
+
+        torch.nn.utils.parametrize.register_parametrization(self.t1, "weight", Tril(diagonal=-1))
+        torch.nn.utils.parametrize.register_parametrization(self.t2, "weight", Tril(diagonal=-1))
+
+
+    def forward(self, x):
+        """
+        Returns f_ar(x), and diag of Jacobian
+        """
+        u = x 
+        s1, Jdiag_s1 = self.s1(u)
+
+        ths1 = torch.nn.functional.tanh(s1 + torch.matmul(u, self.t1.weight)) 
+        dths1 = 1 - torch.square(ths1)
+        
+        Jdiag1 = Jdiag_s1 * dths1
+
+        s2, Jdiag_s2 = self.s2(u)
+
+        y = self.gamma * s2 * ths1 + torch.matmul(u, self.t2.weight)
+        Jdiag = self.gamma * (s2 * Jdiag1 + ths1 * Jdiag_s2)
+        
+        return y, Jdiag 
+    
+class GeneralizedSylvesterBlock(torch.nn.Module):
+    """
+    Generalized Sylvester normalizing flow block.
+    
+    This module implements a generalized Sylvester normalizing flow that
+    provides an invertible mapping with tractable Jacobian determinant.
+    
+    Args:
+        config (Dict[str, Any]): Configuration dictionary containing:
+            - input_size (int): Dimension of input data
+            - orthogonal_map (String): the method for orthogonalizing the W matrix
+
+    """
+    def __init__(self, input_size, orthogonal_map='cayley'):
+        super(GeneralizedSylvesterBlock, self).__init__()
+        self.far = AutoRecursiveFunction(input_size)
+        self.W = torch.nn.Linear(input_size, input_size, bias=False)
+        torch.nn.utils.parametrizations.orthogonal(self.W, name='weight', orthogonal_map=orthogonal_map) 
+
+    def forward(self, x):
+        if len(x.shape)==1:
+            x = x.unsqueeze(0) # Batch single examples
+        W = self.W.weight
+        y = torch.matmul(W, x.transpose(1,0)).transpose(1,0)
+        y, ldj = self.far(y)
+        y = torch.matmul(y, W)
+        y = y + x
+        return y, torch.sum(torch.log(torch.abs(1 + ldj)), dim=1)
+    
+    def inverse(self, x):
+        W = self.W.weight
+        v = torch.matmul(W, x.transpose(1,0)).transpose(1,0)
+        u = v.clone()
+        for it in range(50):
+            # Quik implementation of fixed point iterations
+            u = v - self.far(u)[0]
+        
+        return torch.matmul(u, W)
