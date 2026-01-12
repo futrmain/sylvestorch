@@ -7,6 +7,8 @@ Normalizing Flows are transformations $`y=f(x)`$ for which we require two key pr
 1. **Invertibility**, i.e. $`f^{-1}`$ exists (and is tractable)
 2. **Density estimation**, i.e. the determinant of the Jacobian of $`f`$ is tractable (and differentiable)
 
+### Original formulation
+
 [Sylvester Normalizing Flows](https://arxiv.org/abs/1803.05649) achieve these by taking a traditional residual block, $`f(x) = x + L_2 h(L_1 x + b)`$, and imposing constraints on $`L_1`$ and $`L_2`$. Namely, they parameterize $`L_1`$ as $`L_1 = R_1 Q^t`$ and $`L_2`$ as $`L_2 = QR_2`$, so that
 
 ```math
@@ -15,7 +17,25 @@ f(x) = x + QR_2h(R_1 Q^t + \mathbf{b})
 
 where $`Q`$ is an orthonormal matrix, $`R_1`$ and $`R_2`$ are upper triangular matrices with appropriate diagonal values, $`h`$ is a non-linear (smooth, bounded) activation function, and $`b`$  is a learned constant vector. 
 
-Several such residual blocks can be chained without loss of properties 1 and 2. 
+This is omplemented by `layers.SylvesterBlock` and used by `models.SylvesterNet`.
+
+### Generalized Sylvester
+
+[Generalized Sylvester Flows](https://arxiv.org/abs/2006.01910) use the following formulation for its layers:
+
+```math
+f(x) = x + W^{-1}f_{AR}(Wx)
+```
+
+where $`W`$ can be any invertible matrix, and $`f_{AR}`$  is a smooth autoregressive function.
+
+Particularly, $`f_{AR}`$ is expressed as: 
+
+```math
+f_{AR}(x) = \gamma s_2(x) tanh(x s_1(x) + t_1(x)) + t2(x)
+```
+
+This is omplemented by `layers.GeneralizedSylvesterBlock` and used by `models.GeneralizedSylvesterNet`.
 
 ## Usage
 
